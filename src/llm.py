@@ -1,16 +1,14 @@
-"""Thin Gemini wrapper for the demo UI chat reply.
+"""Thin OpenAI wrapper for the demo UI chat reply.
 
 This is the ONLY place the lab calls a generative LLM. Benchmark scoring never
 uses an LLM (see LAB.md): retrieval evidence is graded deterministically. Here
-Gemini only turns retrieved memory context into a grounded assistant reply so
+OpenAI only turns retrieved memory context into a grounded assistant reply so
 the mini-product feels real.
 
-Default model: gemini-2.5-flash-lite (override with GEMINI_MODEL).
+Default model: gpt-4o-mini (override with OPENAI_MODEL).
 """
 
 from __future__ import annotations
-
-from typing import Any
 
 from .config import settings
 
@@ -23,24 +21,20 @@ SYSTEM_INSTRUCTION = (
 )
 
 
-def gemini_available() -> bool:
-    """True when a key is configured. UI uses this to show status."""
-    return bool(settings.gemini_api_key)
+def openai_available() -> bool:
+    """True when an OpenAI project key is configured."""
+    return bool(settings.openai_api_key)
 
 
-def _to_contents(history: list[dict[str, str]]) -> list[dict[str, Any]]:
-    """Map chat history to google-genai `contents` turns.
-
-    Roles: user -> "user", everything else (assistant/model) -> "model".
-    """
-    contents: list[dict[str, Any]] = []
+def _to_input(history: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Map local chat history to Responses API input messages."""
+    messages: list[dict[str, str]] = []
     for msg in history:
-        role = "user" if msg.get("role") == "user" else "model"
+        role = "user" if msg.get("role") == "user" else "assistant"
         text = msg.get("content", "")
-        if not text:
-            continue
-        contents.append({"role": role, "parts": [{"text": text}]})
-    return contents
+        if text:
+            messages.append({"role": role, "content": text})
+    return messages
 
 
 def generate_reply(
@@ -50,26 +44,23 @@ def generate_reply(
     *,
     model: str | None = None,
 ) -> str:
-    """Generate a grounded assistant reply with Gemini.
+    """Generate a grounded assistant reply with the OpenAI Responses API.
 
-    Raises RuntimeError if no key, and lets SDK/network errors bubble up so the
-    UI can surface them. `history` should include the latest user turn or not —
-    `user_message` is appended as the final user turn regardless.
+    `history` excludes the latest user turn; `user_message` is appended as the
+    final grounded input. SDK and network errors intentionally bubble up so the
+    UI can display them.
     """
-    if not settings.gemini_api_key:
+    if not settings.openai_api_key:
         raise RuntimeError(
-            "GEMINI_API_KEY is missing. Copy .env.example to .env and add a "
-            "Google AI Studio key to enable chat replies."
+            "OPENAI_API_KEY is missing. Copy .env.example to .env and add an "
+            "OpenAI project API key to enable chat replies."
         )
 
-    # Lazy import so the rest of the package works without google-genai installed
-    # (tests, report generation, retrieval benchmarks never need it).
-    from google import genai
-    from google.genai import types
+    # Lazy import: benchmark scoring and memory retrieval never require an LLM.
+    from openai import OpenAI
 
-    client = genai.Client(api_key=settings.gemini_api_key)
-    model_name = model or settings.gemini_model
-
+    client = OpenAI(api_key=settings.openai_api_key)
+    model_name = model or settings.openai_model
     grounding = (
         "Retrieved memory context for this turn:\n"
         "-------------------------------------\n"
@@ -78,16 +69,13 @@ def generate_reply(
         f"User message: {user_message}"
     )
 
-    contents = _to_contents(history)
-    contents.append({"role": "user", "parts": [{"text": grounding}]})
-
-    response = client.models.generate_content(
+    messages = _to_input(history)
+    messages.append({"role": "user", "content": grounding})
+    response = client.responses.create(
         model=model_name,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
-            temperature=0.3,
-            max_output_tokens=800,
-        ),
+        instructions=SYSTEM_INSTRUCTION,
+        input=messages,
+        temperature=0.3,
+        max_output_tokens=800,
     )
-    return (getattr(response, "text", "") or "").strip()
+    return (getattr(response, "output_text", "") or "").strip()

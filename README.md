@@ -17,13 +17,29 @@ Bo starter kit cho buoi lab 150-180 phut ve Memory Systems for Agents.
 
 ```bash
 cp .env.example .env
-# dien ZEP_API_KEY vao .env
+# dien ZEP_API_KEY va OPENAI_API_KEY vao .env
 
 docker compose build
 docker compose up -d redis qdrant
 docker compose run --rm app python -m src.seed
 
 docker compose run --rm app python -m src.evaluate --impl reference --reuse-seeded
+```
+
+### Lay API key
+
+1. Zep: dang ky tai `https://app.getzep.com`, mo project (project dau tien
+   duoc tao khi dang ky), vao **Project Settings -> API Keys**, tao key va copy
+   mot lan vao `ZEP_API_KEY`.
+2. OpenAI: vao `https://platform.openai.com/api-keys`, tao project API key va
+   copy vao `OPENAI_API_KEY`.
+3. Giu model `OPENAI_MODEL=gpt-4o-mini`. Khong commit file `.env` va khong dan
+   key vao issue, screenshot hoac chat.
+
+```dotenv
+ZEP_API_KEY=<zep-project-key>
+OPENAI_API_KEY=<openai-project-key>
+OPENAI_MODEL=gpt-4o-mini
 ```
 
 Ket qua reference duoc ghi vao `reports/benchmark_reference.json` va `reports/benchmark_reference.md`. Student run ghi vao `reports/benchmark.json` va `reports/benchmark.md`.
@@ -54,7 +70,7 @@ docker compose run --rm app python -m src.compare_reports
 # Phut 110: copy data/golden_eval.json (giang vien phat), roi:
 docker compose run --rm app python -m src.evaluate --impl student --reuse-seeded --golden
 # Bonus UI:
-# GEMINI_API_KEY trong .env de chat; retrieval van chay khong can Gemini
+# OPENAI_API_KEY trong .env de chat bang gpt-4o-mini; retrieval van chay khong can OpenAI
 # make ui   # http://localhost:8501
 ```
 
